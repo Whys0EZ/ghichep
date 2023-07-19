@@ -1,0 +1,185 @@
+==============================Cài đặt Node Exporter=========================================================
+
+$ wget https://github.com/prometheus/node_exporter/releases/download/v1.0.1/node_exporter-1.0.1.linux-amd64.tar.gz
+
+tar xvzf node_exporter-1.0.1.linux-amd64.tar.gz
+
+useradd -rs /bin/false node_exporter
+
+cd node_exporter-1.0.1.linux-amd64/
+cp node_exporter /usr/local/bin
+
+chown node_exporter:node_exporter /usr/local/bin/node_exporter
+
+$ cd /lib/systemd/system
+$ sudo vim node_exporter.service
+
+[Unit]
+Description=Node Exporter
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+
+
+systemctl daemon-reload
+systemctl start node_exporter
+
+==================================Install Prometheus Server=======================================
+
+groupadd --system prometheus
+useradd -s /sbin/nologin --system -g prometheus prometheus
+mkdir /var/lib/prometheus
+for i in rules rules.d files_sd; do sudo mkdir -p /etc/prometheus/${i}; done
+
+
+yum -y install wget
+mkdir -p /tmp/prometheus && cd /tmp/prometheus
+curl -s https://api.github.com/repos/prometheus/prometheus/releases/latest \
+  | grep browser_download_url \
+  | grep linux-amd64 \
+  | cut -d '"' -f 4 \
+  | wget -qi -
+
+tar xvf prometheus*.tar.gz
+cd prometheus*/
+
+mv prometheus promtool /usr/local/bin/
+mv prometheus.yml  /etc/prometheus/prometheus.yml
+sudo mv consoles/ console_libraries/ /etc/prometheus/
+cd ~/
+rm -rf /tmp/prometheus
+
+nano /etc/prometheus/prometheus.yml
+----------------------------------------------
+ - job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['localhost:9090']
+----------------------------------------------
+
+vim /etc/systemd/system/prometheus.service 
+---------------------------------------------------------------
+[Unit]
+Description=Prometheus
+Documentation=https://prometheus.io/docs/introduction/overview/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Environment="GOMAXPROCS=1"
+User=prometheus
+Group=prometheus
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/etc/prometheus/consoles \
+  --web.console.libraries=/etc/prometheus/console_libraries \
+  --web.listen-address=0.0.0.0:9090 \
+  --web.external-url=
+
+SyslogIdentifier=prometheus
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+----------------------------------------------------------------
+
+Remember to edit the line:
+
+Environment="GOMAXPROCS=1
+Replace 1 with the number of vcpus on your server.
+
+4. Set Permissions, Firewall and Start Prometheus Service
+
+Change the ownership of these directories to Prometheus user and group.
+
+for i in rules rules.d files_sd; do sudo chown -R prometheus:prometheus /etc/prometheus/${i}; done
+for i in rules rules.d files_sd; do sudo chmod -R 775 /etc/prometheus/${i}; done
+sudo chown -R prometheus:prometheus /var/lib/prometheus/
+Start and enable prometheus service:
+
+sudo systemctl daemon-reload
+sudo systemctl start prometheus
+sudo systemctl enable prometheus
+
+Open a port on the firewall.
+
+sudo firewall-cmd --add-port=9090/tcp --permanent
+sudo firewall-cmd --reload
+For me, I’ll go with firewalld-rich rules to allow access from only my trusted subnets and IPs.
+
+sudo firewall-cmd --permanent --add-rich-rule 'rule family="ipv4" \
+source address="192.168.10.0/24" port protocol="tcp" port="9090" accept'
+sudo firewall-cmd --reload
+
+
+=================================================================================================================
+==================================== Prometheus + cAdvisor +Grafara Docker =======================================
+
+prometheus.yml
+-------------------------------
+scrape_configs:
+- job_name: cadvisor
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - cadvisor:8080
+- job_name: node-exporter
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - 192.168.1.50:9100
+    - 192.168.122.1:9100
+------------------------------------------------------
+
+docker-compose.yml
+
+-------------------------------------------------------
+
+version: "3.4"
+services:
+  cadvisor:
+    image: gcr.io/google-containers/cadvisor:latest
+    container_name: cadvisor
+    ports:
+    - 8080:8080
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+    - 9090:9090
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+    - cadvisor
+  grafana:
+    image: grafana/grafana
+    ports:
+    - 4000:3000
+    user: root
+    volumes:
+    - ./data:/var/lib/grafana
+    restart: always
+    depends_on:
+    - prometheus
+-------------------------------------------------------------------------
+docker-compose up -d
