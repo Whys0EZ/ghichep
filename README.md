@@ -1,0 +1,2 @@
+# ghichep
+configure guide everthing
