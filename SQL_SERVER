@@ -1,0 +1,88 @@
+========== Show all database ==================
+
+SELECT name, database_id, create_date  
+FROM sys.databases;  
+GO 
+
+========== thay đổi kiểu dữ liệu ==============
+
+ALTER TABLE [dbo].[Fault_Code_Checker84]
+ALTER COLUMN [QueryData] NVARCHAR(MAX)
+
+========== Xóa 1 cột ==========================
+
+ALTER TABLE table_name
+DROP COLUMN column_name;
+
+========== Xóa 1 hàng ========================
+
+DELETE FROM table_name
+WHERE condition;
+
+DELETE FROM Fault_Code_Checker84
+WHERE Fault_Code = 'ABC';
+
+
+========== Insert dữ liệu ======================
+
+INSERT INTO Fault_Code (Fault_Code, Fault_Type, Fault_Level, Fault_Name_VN, Fault_Name_EN, Form10_Active, UserUpdate, LastUpdate, Factory)
+VALUES ('FC001', 'Type A', '1', 'Lỗi A', 'Error A', 1, 'Admin', GETDATE(), 'Factory A'),
+       ('FC002', 'Type B', '2', 'Lỗi B', 'Error B', 0, 'User', GETDATE(), 'Factory B'),
+       ('FC003', 'Type C', '1', 'Lỗi C', 'Error C', 1, 'Admin', GETDATE(), 'Factory C');
+
+--Update Fault_Code set Fault_Type=N'nặng' where Form2_Active=1
+
+==========  thay đổi một cột từ NOT NULL thành NULL ==================
+
+ALTER TABLE table_name
+ALTER COLUMN column_name datatype NULL;
+
+============ Thêm cột ===============================================
+
+ALTER TABLE table_name
+ADD column_name datatype [NULL | NOT NULL];
+
+ALTER TABLE table_name
+ADD new_column INT NULL;
+
+--------nhiều cột-----------
+ALTER TABLE TenBang
+ADD TenCot1 KieuDuLieu1,
+    TenCot2 KieuDuLieu2,
+    TenCot3 KieuDuLieu3;
+
+============ cập nhật dữ liệu trong SQL Server=======================
+
+
+UPDATE table_name
+SET column1 = value1, column2 = value2, ...
+WHERE condition;
+
+
+=============== kiểm tra trước khi xóa các cột giống nhau =============
+
+SELECT *
+FROM MyTable
+WHERE Id NOT IN (
+    SELECT MIN(Id)
+    FROM MyTable
+    GROUP BY Name, Value
+);
+
+------------------------
+
+DELETE FROM MyTable
+WHERE Id NOT IN (
+    SELECT MIN(Id)
+    FROM MyTable
+    GROUP BY Name, Value
+);
+
+
+=============  Search procedure =======================================
+
+SELECT name
+FROM   sys.procedures
+WHERE  Object_definition(object_id) LIKE '%WHS_PDA_ChangeLocation_Query%' 
+
+=======================================================================
